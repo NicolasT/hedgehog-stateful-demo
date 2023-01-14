@@ -24,8 +24,12 @@ original article.
 [The fourth commit][7341460c0e7] applies the changes from the
 **Fix the model** section, which causes the tests to succeed again.
 
-This commit adds test-case labelling, as explained in the
+[The fifth commit][4489784f61e] adds test-case labelling, as explained in the
 **Check commands get used** section of the original article.
+
+This commit adds business rule validation, which causes the tests to fail
+again, as expected. See the **Assert business rules** section in the original
+article.
 
 [hedgehog]: https://hedgehog.qa/
 [quickcheck]: https://hackage.haskell.org/package/QuickCheck
@@ -37,3 +41,4 @@ This commit adds test-case labelling, as explained in the
 [8a7fefdab86]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/8a7fefdab86635915402b1bada48d99b61c04aab
 [48ec8df136e]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/48ec8df136e3f54c9a82bb0f39aa42cd55c6cf3f
 [7341460c0e7]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/7341460c0e7cbf8681b68fe9ca893d3ea6e95d91
+[4489784f61e]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/4489784f61e2956992ee4dcdb7b194387c33e1a2

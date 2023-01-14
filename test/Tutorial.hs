@@ -354,13 +354,22 @@ execCommands conn xs =
     CreatePost userIx title body ->
       execCreatePost conn userIx title body
 
+assertNoDuplicateEmails :: MonadTest m => Model -> m ()
+assertNoDuplicateEmails model = do
+  -- check for email duplicates
+  let want = List.nubBy ((==) `on` userEmail) (modelUsers model)
+  let got = modelUsers model
+  want === got
+
 prop_commands :: Pool Connection -> Property
 prop_commands pool =
   property $ do
     commands <- forAll $ Gen.list (Range.constant 0 100) genCommand
     withResource pool . abort $ \conn -> do
-      _ <- evalIO $ createTables conn
+      evalIO $ createTables conn
       model <- execCommands conn commands
+
+      assertNoDuplicateEmails model
 
       let n = length (modelPosts model)
       when (n >= 10) $ label "Posts 10+"
