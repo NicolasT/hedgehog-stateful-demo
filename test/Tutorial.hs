@@ -1,36 +1,22 @@
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StrictData #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
-import           Control.Exception (Exception, throwIO, try, catch)
+import           Control.Exception (Exception, throwIO)
 import           Control.Exception.Lifted (bracket_)
-import           Control.Monad (when)
 import           Control.Monad.Base (liftBase)
 import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.State.Class (MonadState(..), modify, gets)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.State (execStateT)
 
-import           Data.Foldable (for_)
-import           Data.Function (on)
 import           Data.Kind (Type)
-import qualified Data.List as List
-import           Data.Maybe (listToMaybe, fromJust)
+import           Data.Maybe (fromJust)
 import           Data.Pool (Pool, createPool, withResource)
-import           Data.String (fromString)
 import           Data.Text (Text)
-import           Data.Time.Calendar (Day(..))
 import           Data.Time.Clock (UTCTime(..))
 
 import           Database.PostgreSQL.Simple (Connection, Only(..))
@@ -41,14 +27,11 @@ import           Database.PostgreSQL.Simple.SqlQQ (sql)
 import           Database.Postgres.Temp (with, toConnectionString)
 
 import           GHC.Generics (Generic)
-import           GHC.Stack (HasCallStack, withFrozenCallStack)
 
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import           Hedgehog.Main (defaultMain)
 import qualified Hedgehog.Range as Range
-
-import           Text.Printf (printf)
 
 data DbError = DbError Text
   deriving (Eq, Ord, Show)
