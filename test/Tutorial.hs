@@ -200,6 +200,9 @@ prop_tables pool =
 data CreateUser (v :: Type -> Type) = CreateUser Text Text
   deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
 
+newtype DeleteUser (v :: Type -> Type) = DeleteUser (Var User v)
+  deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
+
 data CreatePost (v :: Type -> Type) = CreatePost (Var User v) Text Text
   deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
 
@@ -208,6 +211,11 @@ genCreateUser = do
   name <- Gen.element ["stephanie", "lennart", "simon"]
   pure $
     CreateUser name (name <> "@haskell.land")
+
+genDeleteUser :: MonadGen gen => [Var User v] -> gen (DeleteUser v)
+genDeleteUser users =
+  DeleteUser
+    <$> Gen.element users
 
 genCreatePost :: MonadGen gen => [Var User v] -> gen (CreatePost v)
 genCreatePost users =
@@ -224,6 +232,10 @@ data Model (v :: Type -> Type) =
 modelAddUser :: Var User v -> Model v -> Model v
 modelAddUser user x =
   x { modelUsers = modelUsers x <> [user] }
+
+modelRemoveUser :: Eq1 v => Var User v-> Model v -> Model v
+modelRemoveUser user x =
+  x { modelUsers = filter (/= user) (modelUsers x) }
 
 execCreateUser :: (
     MonadIO m
@@ -257,6 +269,24 @@ cCreateUser conn = Command gen exec [
     gen _ = Just genCreateUser
     exec (CreateUser name email) = execCreateUser conn name email
 
+execDeleteUser :: (
+    MonadIO m
+  , MonadTest m
+  )
+  => Connection
+  -> User
+  -> m ()
+execDeleteUser conn user = do
+  evalIO $ deleteUser conn (userId user)
+
+cDeleteUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
+cDeleteUser conn = Command gen exec [
+  Update $ \model (DeleteUser user) _output -> modelRemoveUser user model
+  ]
+  where
+    gen (Model users) = if null users then Nothing else Just (genDeleteUser users)
+    exec (DeleteUser user) = execDeleteUser conn (concrete user)
+
 execCreatePost :: (
     MonadIO m
   , MonadTest m
@@ -287,7 +317,7 @@ prop_commands :: Pool Connection -> Property
 prop_commands pool =
   property $ do
     withResource pool $ \conn -> do
-      let commands = ($ conn) <$> [cCreateUser, cCreatePost]
+      let commands = ($ conn) <$> [cCreateUser, cDeleteUser, cCreatePost]
           initialState = Model []
 
       actions <- forAll $ Gen.sequential (Range.linear 1 100) initialState commands

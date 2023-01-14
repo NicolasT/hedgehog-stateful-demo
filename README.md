@@ -14,8 +14,11 @@ Make sure to read it first!
 [The first commit][a7f2e4b32f4] imports all code from the original blog-post up
 to the **Generate commands** section.
 
-This commit adds the code from the **Generate commands** and
-**Execute commands** sections.
+[The second commit][8a7fefdab86] adds the code from the **Generate commands**
+and **Execute commands** sections.
+
+This commit adds code from the **Delete some users** section, which causes the
+tests to fail, as expected and explained in the original article.
 
 [hedgehog]: https://hedgehog.qa/
 [quickcheck]: https://hackage.haskell.org/package/QuickCheck
@@ -24,3 +27,4 @@ This commit adds the code from the **Generate commands** and
 [blog]: https://jacobstanley.io/how-to-use-hedgehog-to-test-a-real-world-large-scale-stateful-app/
 
 [a7f2e4b32f4]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/a7f2e4b32f4fb1ad6ecb46537c5752b734a8156e
+[8a7fefdab86]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/8a7fefdab86635915402b1bada48d99b61c04aab
