@@ -27,9 +27,13 @@ original article.
 [The fifth commit][4489784f61e] adds test-case labelling, as explained in the
 **Check commands get used** section of the original article.
 
-This commit adds business rule validation, which causes the tests to fail
-again, as expected. See the **Assert business rules** section in the original
-article.
+[The sixth commit][c76306356e2] adds business rule validation, which causes the
+tests to fail again, as expected. See the **Assert business rules** section in
+the original article.
+
+This commit reverts the previous one, since we don't want failing tests. Hence,
+the code is back to that of the **Check commands get used** section of the
+original article.
 
 [hedgehog]: https://hedgehog.qa/
 [quickcheck]: https://hackage.haskell.org/package/QuickCheck
@@ -42,3 +46,4 @@ article.
 [48ec8df136e]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/48ec8df136e3f54c9a82bb0f39aa42cd55c6cf3f
 [7341460c0e7]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/7341460c0e7cbf8681b68fe9ca893d3ea6e95d91
 [4489784f61e]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/4489784f61e2956992ee4dcdb7b194387c33e1a2
+[c76306356e2]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/c76306356e2a54a8a493478e1a710753ba51fd41
