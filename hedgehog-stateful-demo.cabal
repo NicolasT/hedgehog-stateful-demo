@@ -1,27 +1,31 @@
-cabal-version:      3.0
-name:               hedgehog-stateful-demo
-version:            0.1.0.0
+cabal-version:   3.0
+name:            hedgehog-stateful-demo
+version:         0.1.0.0
+
 -- synopsis:
 -- description:
-license:            GPL-3.0-or-later
-license-file:       LICENSE
-author:             Nicolas Trangez
-maintainer:         ikke@nicolast.be
+license:         GPL-3.0-or-later
+license-file:    LICENSE
+author:          Nicolas Trangez
+maintainer:      ikke@nicolast.be
+
 -- copyright:
-category:           Testing
-build-type:         Simple
-extra-doc-files:    CHANGELOG.md
+category:        Testing
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+
 -- extra-source-files:
 
 common warnings
-    ghc-options: -Wall
+  ghc-options: -Wall
 
 test-suite hedgehog-stateful-demo-test
-    import:           warnings
-    default-language: Haskell2010
-    -- other-modules:
-    -- other-extensions:
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   test
-    main-is:          Tutorial.hs
-    build-depends:    base ^>=4.17.0.0
+  import:           warnings
+  default-language: Haskell2010
+
+  -- other-modules:
+  -- other-extensions:
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Tutorial.hs
+  build-depends:    base ^>=4.17.0.0
