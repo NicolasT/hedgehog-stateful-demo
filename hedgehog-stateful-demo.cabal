@@ -1,20 +1,36 @@
 cabal-version:   3.0
 name:            hedgehog-stateful-demo
 version:         0.1.0.0
+synopsis:        A demonstration of stateful systems testing using Hedgehog
+description:
+  Based on
+  <https://jacobstanley.io/how-to-use-hedgehog-to-test-a-real-world-large-scale-stateful-app/ a tutorial>
+  by <https://jacobstanley.io Jacob Stanley> on using
+  <https://hedgehog.qa/ Hedgehog> to test stateful code, this repository
+  migrates Jacob's code to Hedgehog's built-in state-machine testing
+  functionality.
+  .
+  See README.md for pointers at individual commits to follow the process.
 
--- synopsis:
--- description:
+homepage:        https://github.com/NicolasT/hedgehog-stateful-demo
+bug-reports:     https://github.com/NicolasT/hedgehog-stateful-demo/issues
 license:         GPL-3.0-or-later
 license-file:    LICENSE
 author:          Nicolas Trangez
 maintainer:      ikke@nicolast.be
-
--- copyright:
+copyright:       (c) 2020, Jacob Stanley. (c) 2023, Nicolas Trangez
 category:        Testing
 build-type:      Simple
-extra-doc-files: CHANGELOG.md
+extra-doc-files:
+  CHANGELOG.md
+  README.md
 
 -- extra-source-files:
+
+source-repository head
+  type: git
+  location: https://github.com/NicolasT/hedgehog-stateful-demo.git
+  branch: main
 
 common warnings
   ghc-options: -Wall
