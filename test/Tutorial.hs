@@ -1,6 +1,9 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -21,6 +24,7 @@ import           Control.Monad.Trans.State (execStateT)
 
 import           Data.Foldable (for_)
 import           Data.Function (on)
+import           Data.Kind (Type)
 import qualified Data.List as List
 import           Data.Maybe (listToMaybe, fromJust)
 import           Data.Pool (Pool, createPool, withResource)
@@ -36,9 +40,10 @@ import           Database.PostgreSQL.Simple (query, close)
 import           Database.PostgreSQL.Simple.SqlQQ (sql)
 import           Database.Postgres.Temp (with, toConnectionString)
 
+import           GHC.Generics (Generic)
 import           GHC.Stack (HasCallStack, withFrozenCallStack)
 
-import           Hedgehog hiding (Command)
+import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import           Hedgehog.Main (defaultMain)
 import qualified Hedgehog.Range as Range
@@ -189,80 +194,67 @@ readPost conn pid = do
 prop_tables :: Pool Connection -> Property
 prop_tables pool =
   property $ do
-    withResource pool . abort $ \conn -> do
-      evalIO $ createTables conn
+    withResource pool $ \conn -> do
+      abort conn $
+        evalIO $ createTables conn
 
--- Make sure your Hedgehog import is `hiding (Command)`
--- You're building something much simpler that serves the same purpose.
-data Command =
-    CreateUser Text Text     -- name / email
-  | DeleteUser Int           -- user-index
-  | CreatePost Int Text Text -- user-index / title / body
-    deriving (Eq, Ord, Show)
+data CreateUser (v :: Type -> Type) = CreateUser Text Text
+  deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
 
-genCreateUser :: Gen Command
+newtype DeleteUser (v :: Type -> Type) = DeleteUser (Var User v)
+  deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
+
+data CreatePost (v :: Type -> Type) = CreatePost (Var User v) Text Text
+  deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
+
+genCreateUser :: MonadGen gen => gen (CreateUser v)
 genCreateUser = do
   name <- Gen.element ["stephanie", "lennart", "simon"]
   pure $
     CreateUser name (name <> "@haskell.land")
 
--- You can generate just about anything
--- here, you'll see why later.
-genUserIx :: Gen Int
-genUserIx =
-  Gen.int (Range.constant 0 50)
+genDeleteUser :: MonadGen gen => [Var User v] -> gen (DeleteUser v)
+genDeleteUser users =
+  DeleteUser
+    <$> Gen.element users
 
-genCreatePost :: Gen Command
-genCreatePost =
+genCreatePost :: MonadGen gen => [Var User v] -> gen (CreatePost v)
+genCreatePost users =
   CreatePost
-    <$> genUserIx
+    <$> Gen.element users
     <*> Gen.element ["C", "C++", "Haskell", "Rust", "JavaScript"]
     <*> Gen.element ["fast", "slow", "best", "worst"]
 
-genDeleteUser :: Gen Command
-genDeleteUser = do
-  DeleteUser
-    <$> Gen.int (Range.constant 0 50)
-
-genCommand :: Gen Command
-genCommand =
-  Gen.choice [
-      genCreateUser
-    , genDeleteUser
-    , genCreatePost
-    ]
-
-data Model =
+data Model (v :: Type -> Type) =
   Model {
-      modelUsers :: [User]
-    , modelPosts :: [Post]
+      modelUsers :: [Var User v]
+    , modelPosts :: [(Var User v, Var Post v)]
     } deriving (Eq, Ord, Show)
 
-modelAddUser :: User -> Model -> Model
+modelAddUser :: Var User v -> Model v -> Model v
 modelAddUser user x =
   x { modelUsers = modelUsers x <> [user] }
 
-modelRemoveUser :: UserId -> Model -> Model
-modelRemoveUser uid x =
-  x { modelUsers = List.filter ((/= uid) . userId) (modelUsers x) }
+modelRemoveUser :: Eq1 v => Var User v-> Model v -> Model v
+modelRemoveUser user x =
+  x { modelUsers = filter (/= user) (modelUsers x) }
 
-modelAddPost :: Post -> Model -> Model
-modelAddPost post x =
-  x { modelPosts = modelPosts x <> [post] }
+modelAddPost :: Var User v -> Var Post v -> Model v -> Model v
+modelAddPost user post x =
+  x { modelPosts = modelPosts x <> [(user, post)] }
 
-modelUserHasPosts :: UserId -> Model -> Bool
-modelUserHasPosts uid x =
-  any ((uid ==) . postUserId) (modelPosts x)
+modelUserHasPosts :: Eq1 v => Var User v -> Model v -> Bool
+modelUserHasPosts user x =
+  any ((user ==) . fst) (modelPosts x)
 
 execCreateUser :: (
-    MonadState Model m
-  , MonadIO m
+    MonadIO m
   , MonadTest m
   )
   => Connection
   -> Text
   -> Text
-  -> m ()
+  -> m User
 execCreateUser conn name email = do
   let new = NewUser name email
   uid <- evalIO $ createUser conn new
@@ -272,108 +264,92 @@ execCreateUser conn name email = do
   let want = packUser uid (userCreatedAt got) new
   want === got
 
-  -- Track in the model that a user was created.
-  -- Importantly, this means their UserId is known.
-  modify (modelAddUser want)
   label "CreateUser"
 
+  return want
+
+cCreateUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
+cCreateUser conn = Command gen exec [
+  Update $ \model _input output -> modelAddUser output model,
+  Ensure $ \(Model users _) (Model users' _) (CreateUser name email) output -> do
+    assert $ output `notElem` map concrete users
+    assert $ output `elem` map concrete users'
+    userName output === name
+    userEmail output === email
+  ]
+  where
+    gen _ = Just genCreateUser
+    exec (CreateUser name email) = execCreateUser conn name email
+
 execDeleteUser :: (
-    MonadState Model m
-  , MonadIO m
-  , MonadTest m
-  )
-  => Connection
-  -> Int
-  -> m ()
-execDeleteUser conn userN = do
-  muser <- gets (lookupIx userN . modelUsers)
-  case muser of
-    Nothing ->
-      -- no users created yet, failed precondition, skip
-      pure ()
-    Just user -> do
-      active <- gets (modelUserHasPosts (userId user))
-      if active then
-        -- failed precondition
-        -- possible improvement: make sure deleteUser throws
-        pure ()
-      else do
-        evalIO $ deleteUser conn (userId user)
-        modify (modelRemoveUser (userId user))
-        label "DeleteUser"
-
--- Lookup an element at the specified index
--- or a modulo thereof if past the end.
-lookupIx :: Int -> [a] -> Maybe a
-lookupIx ix = \case
-  [] ->
-    Nothing
-  xs ->
-    listToMaybe (drop (ix `mod` length xs) (reverse xs))
-
-execCreatePost :: (
-    MonadState Model m
-  , MonadIO m
-  , MonadTest m
-  )
-  => Connection
-  -> Int
-  -> Text
-  -> Text
-  -> m ()
-execCreatePost conn userIx title body = do
-  muser <- gets (lookupIx userIx . modelUsers)
-  case muser of
-    Nothing ->
-      -- failed precondition, skip
-      pure ()
-    Just user -> do
-      let new = NewPost (userId user) title body
-      pid <- evalIO $ createPost conn new
-      mgot <- evalIO $ readPost conn pid
-      got <- eval $ fromJust mgot
-
-      let want = packPost pid (postCreatedAt got) new
-      want === got
-
-      modify (modelAddPost want)
-      label "CreatePost"
-
-execCommands :: (
     MonadIO m
   , MonadTest m
   )
   => Connection
-  -> [Command]
-  -> m Model
-execCommands conn xs =
-  flip execStateT (Model [] []) . for_ xs $ \case
-    CreateUser name email ->
-      execCreateUser conn name email
-    DeleteUser userIx ->
-      execDeleteUser conn userIx
-    CreatePost userIx title body ->
-      execCreatePost conn userIx title body
+  -> User
+  -> m ()
+execDeleteUser conn user = do
+  evalIO $ deleteUser conn (userId user)
+  label "DeleteUser"
+
+cDeleteUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
+cDeleteUser conn = Command gen exec [
+  Require $ \model (DeleteUser user) -> not (modelUserHasPosts user model),
+  Update $ \model (DeleteUser user) _output -> modelRemoveUser user model
+  ]
+  where
+    gen (Model users _) = if null users then Nothing else Just (genDeleteUser users)
+    exec (DeleteUser user) = execDeleteUser conn (concrete user)
+
+execCreatePost :: (
+    MonadIO m
+  , MonadTest m
+  )
+  => Connection
+  -> User
+  -> Text
+  -> Text
+  -> m Post
+execCreatePost conn user title body = do
+  let new = NewPost (userId user) title body
+  pid <- evalIO $ createPost conn new
+  mgot <- evalIO $ readPost conn pid
+  got <- eval $ fromJust mgot
+
+  let want = packPost pid (postCreatedAt got) new
+  want === got
+
+  label "CreatePost"
+
+  return want
+
+cCreatePost :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
+cCreatePost conn = Command gen exec [
+  Update $ \model (CreatePost user _ _) output -> modelAddPost user output model
+  ]
+  where
+    gen (Model users _) = if null users then Nothing else Just (genCreatePost users)
+    exec (CreatePost user title body) = execCreatePost conn (concrete user) title body
 
 prop_commands :: Pool Connection -> Property
 prop_commands pool =
   property $ do
-    commands <- forAll $ Gen.list (Range.constant 0 100) genCommand
-    withResource pool . abort $ \conn -> do
-      _ <- evalIO $ createTables conn
-      model <- execCommands conn commands
+    withResource pool $ \conn -> do
+      let commands = ($ conn) <$> [cCreateUser, cDeleteUser, cCreatePost]
+          initialState = Model [] []
 
-      let n = length (modelPosts model)
-      when (n >= 10) $ label "Posts 10+"
-      when (n >= 20) $ label "Posts 20+"
-      when (n >= 30) $ label "Posts 30+"
+      actions <- forAll $ Gen.sequential (Range.linear 1 100) initialState commands
 
-abort :: MonadBaseControl IO m => (Connection -> m a) -> Connection -> m a
-abort f conn =
+      abort conn $ do
+        evalIO $ createTables conn
+        executeSequential initialState actions
+
+abort :: MonadBaseControl IO m => Connection -> m a -> m a
+abort conn f =
   bracket_
     (liftBase (execute_ conn "BEGIN"))
     (liftBase (execute_ conn "ROLLBACK"))
-    (f conn)
+    f
 
 withPool :: (Pool Connection -> IO a) -> IO a
 withPool io =
