@@ -11,8 +11,11 @@ It's based on a blog-post by [Jacob Stanley][jacob-stanley]:
 "[How to use Hedgehog to test a real world, large scale, stateful app][blog]".
 Make sure to read it first!
 
-This commit imports all code from the original blog-post up to the
-**Generate commands** section.
+[The first commit][a7f2e4b32f4] imports all code from the original blog-post up
+to the **Generate commands** section.
+
+This commit adds the code from the **Generate commands** and
+**Execute commands** sections.
 
 [hedgehog]: https://hedgehog.qa/
 [quickcheck]: https://hackage.haskell.org/package/QuickCheck
@@ -20,3 +23,4 @@ This commit imports all code from the original blog-post up to the
 [jacob-stanley]: https://jacobstanley.io
 [blog]: https://jacobstanley.io/how-to-use-hedgehog-to-test-a-real-world-large-scale-stateful-app/
 
+[a7f2e4b32f4]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/a7f2e4b32f4fb1ad6ecb46537c5752b734a8156e

@@ -191,6 +191,127 @@ prop_tables pool =
     withResource pool . abort $ \conn -> do
       evalIO $ createTables conn
 
+-- Make sure your Hedgehog import is `hiding (Command)`
+-- You're building something much simpler that serves the same purpose.
+data Command =
+    CreateUser Text Text     -- name / email
+  | CreatePost Int Text Text -- user-index / title / body
+    deriving (Eq, Ord, Show)
+
+genCreateUser :: Gen Command
+genCreateUser = do
+  name <- Gen.element ["stephanie", "lennart", "simon"]
+  pure $
+    CreateUser name (name <> "@haskell.land")
+
+-- You can generate just about anything
+-- here, you'll see why later.
+genUserIx :: Gen Int
+genUserIx =
+  Gen.int (Range.constant 0 50)
+
+genCreatePost :: Gen Command
+genCreatePost =
+  CreatePost
+    <$> genUserIx
+    <*> Gen.element ["C", "C++", "Haskell", "Rust", "JavaScript"]
+    <*> Gen.element ["fast", "slow", "best", "worst"]
+
+genCommand :: Gen Command
+genCommand =
+  Gen.choice [
+      genCreateUser
+    , genCreatePost
+    ]
+
+data Model =
+  Model {
+      modelUsers :: [User]
+    } deriving (Eq, Ord, Show)
+
+modelAddUser :: User -> Model -> Model
+modelAddUser user x =
+  x { modelUsers = modelUsers x <> [user] }
+
+execCreateUser :: (
+    MonadState Model m
+  , MonadIO m
+  , MonadTest m
+  )
+  => Connection
+  -> Text
+  -> Text
+  -> m ()
+execCreateUser conn name email = do
+  let new = NewUser name email
+  uid <- evalIO $ createUser conn new
+  mgot <- evalIO $ readUser conn uid
+  got <- eval $ fromJust mgot
+
+  let want = packUser uid (userCreatedAt got) new
+  want === got
+
+  -- Track in the model that a user was created.
+  -- Importantly, this means their UserId is known.
+  modify (modelAddUser want)
+
+-- Lookup an element at the specified index
+-- or a modulo thereof if past the end.
+lookupIx :: Int -> [a] -> Maybe a
+lookupIx ix = \case
+  [] ->
+    Nothing
+  xs ->
+    listToMaybe (drop (ix `mod` length xs) (reverse xs))
+
+execCreatePost :: (
+    MonadState Model m
+  , MonadIO m
+  , MonadTest m
+  )
+  => Connection
+  -> Int
+  -> Text
+  -> Text
+  -> m ()
+execCreatePost conn userIx title body = do
+  muser <- gets (lookupIx userIx . modelUsers)
+  case muser of
+    Nothing ->
+      -- failed precondition, skip
+      pure ()
+    Just user -> do
+      let new = NewPost (userId user) title body
+      pid <- evalIO $ createPost conn new
+      mgot <- evalIO $ readPost conn pid
+      got <- eval $ fromJust mgot
+
+      let want = packPost pid (postCreatedAt got) new
+      want === got
+
+execCommands :: (
+    MonadIO m
+  , MonadTest m
+  )
+  => Connection
+  -> [Command]
+  -> m Model
+execCommands conn xs =
+  flip execStateT (Model []) . for_ xs $ \case
+    CreateUser name email ->
+      execCreateUser conn name email
+    CreatePost userIx title body ->
+      execCreatePost conn userIx title body
+
+prop_commands :: Pool Connection -> Property
+prop_commands pool =
+  property $ do
+    commands <- forAll $ Gen.list (Range.constant 0 100) genCommand
+    withResource pool . abort $ \conn -> do
+      evalIO $ createTables conn
+      _model <- execCommands conn commands
+      pure ()
+
 abort :: MonadBaseControl IO m => (Connection -> m a) -> Connection -> m a
 abort f conn =
   bracket_
@@ -206,9 +327,11 @@ withPool io =
     pool <- createPool connect close 2 60 10
     io pool
 
+-- don't forget to add prop_commands to your tests function
 tests :: IO Bool
 tests =
   withPool $ \pool ->
   checkParallel $ Group "Tutorial" [
       ("prop_tables", prop_tables pool)
+    , ("prop_commands", prop_commands pool)
     ]
