@@ -28,4 +28,16 @@ test-suite hedgehog-stateful-demo-test
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Tutorial.hs
-  build-depends:    base ^>=4.17.0.0
+  build-depends:
+    , base               ^>=4.17.0.0
+    , hedgehog ^>=1.2
+    , lifted-base ^>=0.2.3.12
+    , monad-control ^>=1.0.3.1
+    , mtl ^>=2.2.2
+    , postgresql-simple ^>=0.6.5
+    , resource-pool      ^>=0.2.3.2
+    , text ^>=2.0.1
+    , time ^>=1.12.2
+    , tmp-postgres       ^>=1.34.1.0
+    , transformers ^>=0.5.6.2
+    , transformers-base ^>=0.4.6
