@@ -263,6 +263,8 @@ execCreateUser conn name email = do
   let want = packUser uid (userCreatedAt got) new
   want === got
 
+  label "CreateUser"
+
   return want
 
 cCreateUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
@@ -287,6 +289,7 @@ execDeleteUser :: (
   -> m ()
 execDeleteUser conn user = do
   evalIO $ deleteUser conn (userId user)
+  label "DeleteUser"
 
 cDeleteUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
 cDeleteUser conn = Command gen exec [
@@ -314,6 +317,8 @@ execCreatePost conn user title body = do
 
   let want = packPost pid (postCreatedAt got) new
   want === got
+
+  label "CreatePost"
 
   return want
 
