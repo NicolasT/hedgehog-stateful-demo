@@ -17,8 +17,12 @@ to the **Generate commands** section.
 [The second commit][8a7fefdab86] adds the code from the **Generate commands**
 and **Execute commands** sections.
 
-This commit adds code from the **Delete some users** section, which causes the
-tests to fail, as expected and explained in the original article.
+[The third commit][48ec8df136e] adds code from the **Delete some users**
+section, which causes the tests to fail, as expected and explained in the
+original article.
+
+This commit applies the changes from the **Fix the model** section, which
+causes the tests to succeed again.
 
 [hedgehog]: https://hedgehog.qa/
 [quickcheck]: https://hackage.haskell.org/package/QuickCheck
@@ -28,3 +32,4 @@ tests to fail, as expected and explained in the original article.
 
 [a7f2e4b32f4]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/a7f2e4b32f4fb1ad6ecb46537c5752b734a8156e
 [8a7fefdab86]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/8a7fefdab86635915402b1bada48d99b61c04aab
+[48ec8df136e]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/48ec8df136e3f54c9a82bb0f39aa42cd55c6cf3f

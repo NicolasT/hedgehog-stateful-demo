@@ -234,6 +234,7 @@ genCommand =
 data Model =
   Model {
       modelUsers :: [User]
+    , modelPosts :: [Post]
     } deriving (Eq, Ord, Show)
 
 modelAddUser :: User -> Model -> Model
@@ -243,6 +244,14 @@ modelAddUser user x =
 modelRemoveUser :: UserId -> Model -> Model
 modelRemoveUser uid x =
   x { modelUsers = List.filter ((/= uid) . userId) (modelUsers x) }
+
+modelAddPost :: Post -> Model -> Model
+modelAddPost post x =
+  x { modelPosts = modelPosts x <> [post] }
+
+modelUserHasPosts :: UserId -> Model -> Bool
+modelUserHasPosts uid x =
+  any ((uid ==) . postUserId) (modelPosts x)
 
 execCreateUser :: (
     MonadState Model m
@@ -281,8 +290,14 @@ execDeleteUser conn userN = do
       -- no users created yet, failed precondition, skip
       pure ()
     Just user -> do
-      evalIO $ deleteUser conn (userId user)
-      modify (modelRemoveUser (userId user))
+      active <- gets (modelUserHasPosts (userId user))
+      if active then
+        -- failed precondition
+        -- possible improvement: make sure deleteUser throws
+        pure ()
+      else do
+        evalIO $ deleteUser conn (userId user)
+        modify (modelRemoveUser (userId user))
 
 -- Lookup an element at the specified index
 -- or a modulo thereof if past the end.
@@ -318,6 +333,8 @@ execCreatePost conn userIx title body = do
       let want = packPost pid (postCreatedAt got) new
       want === got
 
+      modify (modelAddPost want)
+
 execCommands :: (
     MonadIO m
   , MonadTest m
@@ -326,7 +343,7 @@ execCommands :: (
   -> [Command]
   -> m Model
 execCommands conn xs =
-  flip execStateT (Model []) . for_ xs $ \case
+  flip execStateT (Model [] []) . for_ xs $ \case
     CreateUser name email ->
       execCreateUser conn name email
     DeleteUser userIx ->
