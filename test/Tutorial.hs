@@ -1,6 +1,9 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -21,6 +24,7 @@ import           Control.Monad.Trans.State (execStateT)
 
 import           Data.Foldable (for_)
 import           Data.Function (on)
+import           Data.Kind (Type)
 import qualified Data.List as List
 import           Data.Maybe (listToMaybe, fromJust)
 import           Data.Pool (Pool, createPool, withResource)
@@ -36,9 +40,10 @@ import           Database.PostgreSQL.Simple (query, close)
 import           Database.PostgreSQL.Simple.SqlQQ (sql)
 import           Database.Postgres.Temp (with, toConnectionString)
 
+import           GHC.Generics (Generic)
 import           GHC.Stack (HasCallStack, withFrozenCallStack)
 
-import           Hedgehog hiding (Command)
+import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
@@ -188,60 +193,46 @@ readPost conn pid = do
 prop_tables :: Pool Connection -> Property
 prop_tables pool =
   property $ do
-    withResource pool . abort $ \conn -> do
-      evalIO $ createTables conn
+    withResource pool $ \conn -> do
+      abort conn $
+        evalIO $ createTables conn
 
--- Make sure your Hedgehog import is `hiding (Command)`
--- You're building something much simpler that serves the same purpose.
-data Command =
-    CreateUser Text Text     -- name / email
-  | CreatePost Int Text Text -- user-index / title / body
-    deriving (Eq, Ord, Show)
+data CreateUser (v :: Type -> Type) = CreateUser Text Text
+  deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
 
-genCreateUser :: Gen Command
+data CreatePost (v :: Type -> Type) = CreatePost (Var User v) Text Text
+  deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
+
+genCreateUser :: MonadGen gen => gen (CreateUser v)
 genCreateUser = do
   name <- Gen.element ["stephanie", "lennart", "simon"]
   pure $
     CreateUser name (name <> "@haskell.land")
 
--- You can generate just about anything
--- here, you'll see why later.
-genUserIx :: Gen Int
-genUserIx =
-  Gen.int (Range.constant 0 50)
-
-genCreatePost :: Gen Command
-genCreatePost =
+genCreatePost :: MonadGen gen => [Var User v] -> gen (CreatePost v)
+genCreatePost users =
   CreatePost
-    <$> genUserIx
+    <$> Gen.element users
     <*> Gen.element ["C", "C++", "Haskell", "Rust", "JavaScript"]
     <*> Gen.element ["fast", "slow", "best", "worst"]
 
-genCommand :: Gen Command
-genCommand =
-  Gen.choice [
-      genCreateUser
-    , genCreatePost
-    ]
-
-data Model =
+data Model (v :: Type -> Type) =
   Model {
-      modelUsers :: [User]
+      modelUsers :: [Var User v]
     } deriving (Eq, Ord, Show)
 
-modelAddUser :: User -> Model -> Model
+modelAddUser :: Var User v -> Model v -> Model v
 modelAddUser user x =
   x { modelUsers = modelUsers x <> [user] }
 
 execCreateUser :: (
-    MonadState Model m
-  , MonadIO m
+    MonadIO m
   , MonadTest m
   )
   => Connection
   -> Text
   -> Text
-  -> m ()
+  -> m User
 execCreateUser conn name email = do
   let new = NewUser name email
   uid <- evalIO $ createUser conn new
@@ -251,73 +242,66 @@ execCreateUser conn name email = do
   let want = packUser uid (userCreatedAt got) new
   want === got
 
-  -- Track in the model that a user was created.
-  -- Importantly, this means their UserId is known.
-  modify (modelAddUser want)
+  return want
 
--- Lookup an element at the specified index
--- or a modulo thereof if past the end.
-lookupIx :: Int -> [a] -> Maybe a
-lookupIx ix = \case
-  [] ->
-    Nothing
-  xs ->
-    listToMaybe (drop (ix `mod` length xs) (reverse xs))
+cCreateUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
+cCreateUser conn = Command gen exec [
+  Update $ \model _input output -> modelAddUser output model,
+  Ensure $ \(Model users) (Model users') (CreateUser name email) output -> do
+    assert $ output `notElem` map concrete users
+    assert $ output `elem` map concrete users'
+    userName output === name
+    userEmail output === email
+  ]
+  where
+    gen _ = Just genCreateUser
+    exec (CreateUser name email) = execCreateUser conn name email
 
 execCreatePost :: (
-    MonadState Model m
-  , MonadIO m
-  , MonadTest m
-  )
-  => Connection
-  -> Int
-  -> Text
-  -> Text
-  -> m ()
-execCreatePost conn userIx title body = do
-  muser <- gets (lookupIx userIx . modelUsers)
-  case muser of
-    Nothing ->
-      -- failed precondition, skip
-      pure ()
-    Just user -> do
-      let new = NewPost (userId user) title body
-      pid <- evalIO $ createPost conn new
-      mgot <- evalIO $ readPost conn pid
-      got <- eval $ fromJust mgot
-
-      let want = packPost pid (postCreatedAt got) new
-      want === got
-
-execCommands :: (
     MonadIO m
   , MonadTest m
   )
   => Connection
-  -> [Command]
-  -> m Model
-execCommands conn xs =
-  flip execStateT (Model []) . for_ xs $ \case
-    CreateUser name email ->
-      execCreateUser conn name email
-    CreatePost userIx title body ->
-      execCreatePost conn userIx title body
+  -> User
+  -> Text
+  -> Text
+  -> m Post
+execCreatePost conn user title body = do
+  let new = NewPost (userId user) title body
+  pid <- evalIO $ createPost conn new
+  mgot <- evalIO $ readPost conn pid
+  got <- eval $ fromJust mgot
+
+  let want = packPost pid (postCreatedAt got) new
+  want === got
+
+  return want
+
+cCreatePost :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
+cCreatePost conn = Command gen exec []
+  where
+    gen (Model users) = if null users then Nothing else Just (genCreatePost users)
+    exec (CreatePost user title body) = execCreatePost conn (concrete user) title body
 
 prop_commands :: Pool Connection -> Property
 prop_commands pool =
   property $ do
-    commands <- forAll $ Gen.list (Range.constant 0 100) genCommand
-    withResource pool . abort $ \conn -> do
-      evalIO $ createTables conn
-      _model <- execCommands conn commands
-      pure ()
+    withResource pool $ \conn -> do
+      let commands = ($ conn) <$> [cCreateUser, cCreatePost]
+          initialState = Model []
 
-abort :: MonadBaseControl IO m => (Connection -> m a) -> Connection -> m a
-abort f conn =
+      actions <- forAll $ Gen.sequential (Range.linear 1 100) initialState commands
+
+      abort conn $ do
+        evalIO $ createTables conn
+        executeSequential initialState actions
+
+abort :: MonadBaseControl IO m => Connection -> m a -> m a
+abort conn f =
   bracket_
     (liftBase (execute_ conn "BEGIN"))
     (liftBase (execute_ conn "ROLLBACK"))
-    (f conn)
+    f
 
 withPool :: (Pool Connection -> IO a) -> IO a
 withPool io =
