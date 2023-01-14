@@ -76,7 +76,7 @@ modelAddUser :: Var User v -> Model v -> Model v
 modelAddUser user x =
   x { modelUsers = modelUsers x <> [user] }
 
-modelRemoveUser :: Eq1 v => Var User v-> Model v -> Model v
+modelRemoveUser :: Eq1 v => Var User v -> Model v -> Model v
 modelRemoveUser user x =
   x { modelUsers = filter (/= user) (modelUsers x) }
 
