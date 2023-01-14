@@ -227,6 +227,7 @@ genCreatePost users =
 data Model (v :: Type -> Type) =
   Model {
       modelUsers :: [Var User v]
+    , modelPosts :: [(Var User v, Var Post v)]
     } deriving (Eq, Ord, Show)
 
 modelAddUser :: Var User v -> Model v -> Model v
@@ -236,6 +237,14 @@ modelAddUser user x =
 modelRemoveUser :: Eq1 v => Var User v-> Model v -> Model v
 modelRemoveUser user x =
   x { modelUsers = filter (/= user) (modelUsers x) }
+
+modelAddPost :: Var User v -> Var Post v -> Model v -> Model v
+modelAddPost user post x =
+  x { modelPosts = modelPosts x <> [(user, post)] }
+
+modelUserHasPosts :: Eq1 v => Var User v -> Model v -> Bool
+modelUserHasPosts user x =
+  any ((user ==) . fst) (modelPosts x)
 
 execCreateUser :: (
     MonadIO m
@@ -259,7 +268,7 @@ execCreateUser conn name email = do
 cCreateUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
 cCreateUser conn = Command gen exec [
   Update $ \model _input output -> modelAddUser output model,
-  Ensure $ \(Model users) (Model users') (CreateUser name email) output -> do
+  Ensure $ \(Model users _) (Model users' _) (CreateUser name email) output -> do
     assert $ output `notElem` map concrete users
     assert $ output `elem` map concrete users'
     userName output === name
@@ -281,10 +290,11 @@ execDeleteUser conn user = do
 
 cDeleteUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
 cDeleteUser conn = Command gen exec [
+  Require $ \model (DeleteUser user) -> not (modelUserHasPosts user model),
   Update $ \model (DeleteUser user) _output -> modelRemoveUser user model
   ]
   where
-    gen (Model users) = if null users then Nothing else Just (genDeleteUser users)
+    gen (Model users _) = if null users then Nothing else Just (genDeleteUser users)
     exec (DeleteUser user) = execDeleteUser conn (concrete user)
 
 execCreatePost :: (
@@ -308,9 +318,11 @@ execCreatePost conn user title body = do
   return want
 
 cCreatePost :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
-cCreatePost conn = Command gen exec []
+cCreatePost conn = Command gen exec [
+  Update $ \model (CreatePost user _ _) output -> modelAddPost user output model
+  ]
   where
-    gen (Model users) = if null users then Nothing else Just (genCreatePost users)
+    gen (Model users _) = if null users then Nothing else Just (genCreatePost users)
     exec (CreatePost user title body) = execCreatePost conn (concrete user) title body
 
 prop_commands :: Pool Connection -> Property
@@ -318,7 +330,7 @@ prop_commands pool =
   property $ do
     withResource pool $ \conn -> do
       let commands = ($ conn) <$> [cCreateUser, cDeleteUser, cCreatePost]
-          initialState = Model []
+          initialState = Model [] []
 
       actions <- forAll $ Gen.sequential (Range.linear 1 100) initialState commands
 
