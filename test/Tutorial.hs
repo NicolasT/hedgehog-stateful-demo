@@ -195,6 +195,7 @@ prop_tables pool =
 -- You're building something much simpler that serves the same purpose.
 data Command =
     CreateUser Text Text     -- name / email
+  | DeleteUser Int           -- user-index
   | CreatePost Int Text Text -- user-index / title / body
     deriving (Eq, Ord, Show)
 
@@ -217,10 +218,16 @@ genCreatePost =
     <*> Gen.element ["C", "C++", "Haskell", "Rust", "JavaScript"]
     <*> Gen.element ["fast", "slow", "best", "worst"]
 
+genDeleteUser :: Gen Command
+genDeleteUser = do
+  DeleteUser
+    <$> Gen.int (Range.constant 0 50)
+
 genCommand :: Gen Command
 genCommand =
   Gen.choice [
       genCreateUser
+    , genDeleteUser
     , genCreatePost
     ]
 
@@ -232,6 +239,10 @@ data Model =
 modelAddUser :: User -> Model -> Model
 modelAddUser user x =
   x { modelUsers = modelUsers x <> [user] }
+
+modelRemoveUser :: UserId -> Model -> Model
+modelRemoveUser uid x =
+  x { modelUsers = List.filter ((/= uid) . userId) (modelUsers x) }
 
 execCreateUser :: (
     MonadState Model m
@@ -254,6 +265,24 @@ execCreateUser conn name email = do
   -- Track in the model that a user was created.
   -- Importantly, this means their UserId is known.
   modify (modelAddUser want)
+
+execDeleteUser :: (
+    MonadState Model m
+  , MonadIO m
+  , MonadTest m
+  )
+  => Connection
+  -> Int
+  -> m ()
+execDeleteUser conn userN = do
+  muser <- gets (lookupIx userN . modelUsers)
+  case muser of
+    Nothing ->
+      -- no users created yet, failed precondition, skip
+      pure ()
+    Just user -> do
+      evalIO $ deleteUser conn (userId user)
+      modify (modelRemoveUser (userId user))
 
 -- Lookup an element at the specified index
 -- or a modulo thereof if past the end.
@@ -300,6 +329,8 @@ execCommands conn xs =
   flip execStateT (Model []) . for_ xs $ \case
     CreateUser name email ->
       execCreateUser conn name email
+    DeleteUser userIx ->
+      execDeleteUser conn userIx
     CreatePost userIx title body ->
       execCreatePost conn userIx title body
 
