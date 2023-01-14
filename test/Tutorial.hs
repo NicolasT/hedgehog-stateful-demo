@@ -274,6 +274,7 @@ execCreateUser conn name email = do
   -- Track in the model that a user was created.
   -- Importantly, this means their UserId is known.
   modify (modelAddUser want)
+  label "CreateUser"
 
 execDeleteUser :: (
     MonadState Model m
@@ -298,6 +299,7 @@ execDeleteUser conn userN = do
       else do
         evalIO $ deleteUser conn (userId user)
         modify (modelRemoveUser (userId user))
+        label "DeleteUser"
 
 -- Lookup an element at the specified index
 -- or a modulo thereof if past the end.
@@ -334,6 +336,7 @@ execCreatePost conn userIx title body = do
       want === got
 
       modify (modelAddPost want)
+      label "CreatePost"
 
 execCommands :: (
     MonadIO m
@@ -356,9 +359,13 @@ prop_commands pool =
   property $ do
     commands <- forAll $ Gen.list (Range.constant 0 100) genCommand
     withResource pool . abort $ \conn -> do
-      evalIO $ createTables conn
-      _model <- execCommands conn commands
-      pure ()
+      _ <- evalIO $ createTables conn
+      model <- execCommands conn commands
+
+      let n = length (modelPosts model)
+      when (n >= 10) $ label "Posts 10+"
+      when (n >= 20) $ label "Posts 20+"
+      when (n >= 30) $ label "Posts 30+"
 
 abort :: MonadBaseControl IO m => (Connection -> m a) -> Connection -> m a
 abort f conn =
