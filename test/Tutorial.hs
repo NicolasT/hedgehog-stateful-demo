@@ -8,7 +8,7 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Tutorial where
+module Main where
 
 import           Control.Exception (Exception, throwIO, try, catch)
 import           Control.Exception.Lifted (bracket_)
@@ -40,6 +40,7 @@ import           GHC.Stack (HasCallStack, withFrozenCallStack)
 
 import           Hedgehog hiding (Command)
 import qualified Hedgehog.Gen as Gen
+import           Hedgehog.Main (defaultMain)
 import qualified Hedgehog.Range as Range
 
 import           Text.Printf (printf)
@@ -390,3 +391,6 @@ tests =
       ("prop_tables", prop_tables pool)
     , ("prop_commands", prop_commands pool)
     ]
+
+main :: IO ()
+main = defaultMain [tests]

@@ -11,6 +11,7 @@ It's based on a blog-post by [Jacob Stanley][jacob-stanley]:
 "[How to use Hedgehog to test a real world, large scale, stateful app][blog]".
 Make sure to read it first!
 
+## Importing the Original Code
 [The first commit][a7f2e4b32f4] imports all code from the original blog-post up
 to the **Generate commands** section.
 
@@ -31,9 +32,12 @@ original article.
 tests to fail again, as expected. See the **Assert business rules** section in
 the original article.
 
-This commit reverts the previous one, since we don't want failing tests. Hence,
-the code is back to that of the **Check commands get used** section of the
-original article.
+[The seventh commit][956dd5d59f7] reverts the previous one, since we don't want
+failing tests. Hence, the code is back to that of the
+**Check commands get used** section of the original article.
+
+## Making Cabal Happy
+This commit makes the changes required for `cabal test` to succeed.
 
 [hedgehog]: https://hedgehog.qa/
 [quickcheck]: https://hackage.haskell.org/package/QuickCheck
@@ -47,3 +51,4 @@ original article.
 [7341460c0e7]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/7341460c0e7cbf8681b68fe9ca893d3ea6e95d91
 [4489784f61e]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/4489784f61e2956992ee4dcdb7b194387c33e1a2
 [c76306356e2]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/c76306356e2a54a8a493478e1a710753ba51fd41
+[956dd5d59f7]: https://github.com/NicolasT/hedgehog-stateful-demo/commit/956dd5d59f7887f3562f9741e3a87b19c9d4f37b
