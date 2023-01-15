@@ -1,0 +1,39 @@
+commit e5d501911e2ebd97a7edd3e8b122fc7b354a142d
+Author: Nicolas Trangez <ikke@nicolast.be>
+Date:   Mon Jan 16 23:24:11 2023 +0100
+
+    ci: run tests as non-root
+    
+    PostgreSQL `initdb` and other tools don't want to run as root, and since
+    they're invoked by `tmp-postgres` as part of the test-suite, this
+    implies the tests need to run as non-root.
+    
+    Also, the utilities need to be brought into `$PATH`.
+    
+    See: https://github.com/jfischoff/tmp-postgres/issues/277
+    See: https://github.com/jfischoff/tmp-postgres#github-actions
+
+diff --git a/.github/workflows/haskell-ci.yml b/.github/workflows/haskell-ci.yml
+index 5d1e58d..22fa0b0 100644
+--- a/.github/workflows/haskell-ci.yml
++++ b/.github/workflows/haskell-ci.yml
+@@ -171,7 +171,18 @@ jobs:
+           $CABAL v2-build $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --write-ghc-environment-files=always
+       - name: tests
+         run: |
+-          $CABAL v2-test $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --test-show-details=direct
++          # Because we use `tmp-postgres`, which runs `initdb` and other tools
++          # which don't want to run as `root`, we run the tests as a `test`
++          # user. This user needs access to `dist-newstyle/`, so `chown`
++          # appropriately.
++          # Also, on Ubuntu, `initdb` and friends are not on the default
++          # `$PATH`, so set it accordingly.
++          test -x /usr/lib/postgresql/14/bin/initdb || (echo "initdb not found" >/dev/stderr; false)
++          useradd -U test
++          chown -R test:test dist-newstyle/
++          su -c "/usr/bin/env PATH=$PATH:/usr/lib/postgresql/14/bin $CABAL v2-test $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --test-show-details=direct" test
++          chown -R root:root dist-newstyle/
++          userdel -r test
+       - name: cabal check
+         run: |
+           cd ${PKGDIR_hedgehog_stateful_demo} || false
