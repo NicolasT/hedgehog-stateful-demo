@@ -1,0 +1,6 @@
+distribution: jammy
+apt:
+  postgresql
+
+github-patches:
+  .github/workflows/haskell-ci-postgresql-path.patch
