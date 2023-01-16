@@ -8,12 +8,10 @@ import           Control.Exception (Exception, throwIO)
 import           Data.Time.Clock (UTCTime(..))
 import           Data.Text (Text)
 
-import           Database.PostgreSQL.Simple (Connection, Only(..))
+import           Database.PostgreSQL.Simple (Connection, Only(..), execute, execute_, query)
 import           Database.PostgreSQL.Simple.SqlQQ (sql)
-import           Database.PostgreSQL.Simple (execute, execute_)
-import           Database.PostgreSQL.Simple (query)
 
-data DbError = DbError Text
+newtype DbError = DbError Text
   deriving (Eq, Ord, Show)
 instance Exception DbError where
 

@@ -8,6 +8,7 @@ module Main where
 
 import           Control.Exception (throwIO)
 import           Control.Exception.Lifted (bracket_)
+import           Control.Monad ((<=<))
 import           Control.Monad.Base (liftBase)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -17,10 +18,7 @@ import           Data.Maybe (fromJust)
 import           Data.Pool (Pool, createPool, withResource)
 import           Data.Text (Text)
 
-import           Database.PostgreSQL.Simple (Connection)
-import           Database.PostgreSQL.Simple (connectPostgreSQL)
-import           Database.PostgreSQL.Simple (execute_)
-import           Database.PostgreSQL.Simple (close)
+import           Database.PostgreSQL.Simple (Connection, close, connectPostgreSQL, execute_)
 import           Database.Postgres.Temp (with, toConnectionString)
 
 import           GHC.Generics (Generic)
@@ -186,16 +184,14 @@ prop_commands pool =
         executeSequential initialState actions
 
 abort :: MonadBaseControl IO m => Connection -> m a -> m a
-abort conn f =
+abort conn =
   bracket_
     (liftBase (execute_ conn "BEGIN"))
     (liftBase (execute_ conn "ROLLBACK"))
-    f
 
 withPool :: (Pool Connection -> IO a) -> IO a
 withPool io =
-  (either throwIO pure =<<) .
-  with $ \db -> do
+  either throwIO pure <=< with $ \db -> do
     let connect = connectPostgreSQL (toConnectionString db)
     pool <- createPool connect close 2 60 10
     io pool
