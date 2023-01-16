@@ -18,7 +18,7 @@ import           Data.Maybe (fromJust)
 import           Data.Pool (Pool, createPool, withResource)
 import           Data.Text (Text)
 
-import           Database.PostgreSQL.Simple (Connection, close, connectPostgreSQL, execute_)
+import           Database.PostgreSQL.Simple (Connection, begin, close, connectPostgreSQL, rollback)
 import           Database.Postgres.Temp (with, toConnectionString)
 
 import           GHC.Generics (Generic)
@@ -186,8 +186,8 @@ prop_commands pool =
 abort :: MonadBaseControl IO m => Connection -> m a -> m a
 abort conn =
   bracket_
-    (liftBase (execute_ conn "BEGIN"))
-    (liftBase (execute_ conn "ROLLBACK"))
+    (liftBase (begin conn))
+    (liftBase (rollback conn))
 
 withPool :: (Pool Connection -> IO a) -> IO a
 withPool io =
