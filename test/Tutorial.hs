@@ -6,36 +6,32 @@
 
 module Main where
 
-import           Control.Exception (throwIO)
-import           Control.Exception.Lifted (bracket_)
-import           Control.Monad ((<=<))
-import           Control.Monad.Base (liftBase)
-import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
-import           Data.Kind (Type)
-import           Data.Maybe (fromJust)
-import           Data.Pool (Pool, createPool, withResource)
-import           Data.Text (Text)
-
-import           Database.PostgreSQL.Simple (Connection, begin, close, connectPostgreSQL, rollback)
-import           Database.Postgres.Temp (with, toConnectionString)
-
-import           GHC.Generics (Generic)
-
-import           Hedgehog
+import Control.Exception (throwIO)
+import Control.Exception.Lifted (bracket_)
+import Control.Monad ((<=<))
+import Control.Monad.Base (liftBase)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.Kind (Type)
+import Data.Maybe (fromJust)
+import Data.Pool (Pool, createPool, withResource)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple (Connection, begin, close, connectPostgreSQL, rollback)
+import Database.Postgres.Temp (toConnectionString, with)
+import GHC.Generics (Generic)
+import Hedgehog
 import qualified Hedgehog.Gen as Gen
-import           Hedgehog.Main (defaultMain)
+import Hedgehog.Main (defaultMain)
 import qualified Hedgehog.Range as Range
-
-import           Lib
+import Lib
 
 prop_tables :: Pool Connection -> Property
 prop_tables pool =
   property $ do
     withResource pool $ \conn -> do
       abort conn $
-        evalIO $ createTables conn
+        evalIO $
+          createTables conn
 
 data CreateUser (v :: Type -> Type) = CreateUser Text Text
   deriving (Eq, Ord, Show, Generic, FunctorB, TraversableB)
@@ -64,36 +60,36 @@ genCreatePost users =
     <*> Gen.element ["C", "C++", "Haskell", "Rust", "JavaScript"]
     <*> Gen.element ["fast", "slow", "best", "worst"]
 
-data Model (v :: Type -> Type) =
-  Model {
-      modelUsers :: [Var User v]
-    , modelPosts :: [(Var User v, Var Post v)]
-    } deriving (Eq, Ord, Show)
+data Model (v :: Type -> Type) = Model
+  { modelUsers :: [Var User v],
+    modelPosts :: [(Var User v, Var Post v)]
+  }
+  deriving (Eq, Ord, Show)
 
 modelAddUser :: Var User v -> Model v -> Model v
 modelAddUser user x =
-  x { modelUsers = modelUsers x <> [user] }
+  x {modelUsers = modelUsers x <> [user]}
 
 modelRemoveUser :: Eq1 v => Var User v -> Model v -> Model v
 modelRemoveUser user x =
-  x { modelUsers = filter (/= user) (modelUsers x) }
+  x {modelUsers = filter (/= user) (modelUsers x)}
 
 modelAddPost :: Var User v -> Var Post v -> Model v -> Model v
 modelAddPost user post x =
-  x { modelPosts = modelPosts x <> [(user, post)] }
+  x {modelPosts = modelPosts x <> [(user, post)]}
 
 modelUserHasPosts :: Eq1 v => Var User v -> Model v -> Bool
 modelUserHasPosts user x =
   any ((user ==) . fst) (modelPosts x)
 
-execCreateUser :: (
-    MonadIO m
-  , MonadTest m
-  )
-  => Connection
-  -> Text
-  -> Text
-  -> m User
+execCreateUser ::
+  ( MonadIO m,
+    MonadTest m
+  ) =>
+  Connection ->
+  Text ->
+  Text ->
+  m User
 execCreateUser conn name email = do
   let new = NewUser name email
   uid <- evalIO $ createUser conn new
@@ -108,47 +104,53 @@ execCreateUser conn name email = do
   return want
 
 cCreateUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
-cCreateUser conn = Command gen exec [
-  Update $ \model _input output -> modelAddUser output model,
-  Ensure $ \(Model users _) (Model users' _) (CreateUser name email) output -> do
-    assert $ output `notElem` map concrete users
-    assert $ output `elem` map concrete users'
-    userName output === name
-    userEmail output === email
-  ]
+cCreateUser conn =
+  Command
+    gen
+    exec
+    [ Update $ \model _input output -> modelAddUser output model,
+      Ensure $ \(Model users _) (Model users' _) (CreateUser name email) output -> do
+        assert $ output `notElem` map concrete users
+        assert $ output `elem` map concrete users'
+        userName output === name
+        userEmail output === email
+    ]
   where
     gen _ = Just genCreateUser
     exec (CreateUser name email) = execCreateUser conn name email
 
-execDeleteUser :: (
-    MonadIO m
-  , MonadTest m
-  )
-  => Connection
-  -> User
-  -> m ()
+execDeleteUser ::
+  ( MonadIO m,
+    MonadTest m
+  ) =>
+  Connection ->
+  User ->
+  m ()
 execDeleteUser conn user = do
   evalIO $ deleteUser conn (userId user)
   label "DeleteUser"
 
 cDeleteUser :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
-cDeleteUser conn = Command gen exec [
-  Require $ \model (DeleteUser user) -> not (modelUserHasPosts user model),
-  Update $ \model (DeleteUser user) _output -> modelRemoveUser user model
-  ]
+cDeleteUser conn =
+  Command
+    gen
+    exec
+    [ Require $ \model (DeleteUser user) -> not (modelUserHasPosts user model),
+      Update $ \model (DeleteUser user) _output -> modelRemoveUser user model
+    ]
   where
     gen (Model users _) = if null users then Nothing else Just (genDeleteUser users)
     exec (DeleteUser user) = execDeleteUser conn (concrete user)
 
-execCreatePost :: (
-    MonadIO m
-  , MonadTest m
-  )
-  => Connection
-  -> User
-  -> Text
-  -> Text
-  -> m Post
+execCreatePost ::
+  ( MonadIO m,
+    MonadTest m
+  ) =>
+  Connection ->
+  User ->
+  Text ->
+  Text ->
+  m Post
 execCreatePost conn user title body = do
   let new = NewPost (userId user) title body
   pid <- evalIO $ createPost conn new
@@ -163,9 +165,12 @@ execCreatePost conn user title body = do
   return want
 
 cCreatePost :: (MonadTest m, MonadIO m, MonadGen gen) => Connection -> Command gen m Model
-cCreatePost conn = Command gen exec [
-  Update $ \model (CreatePost user _ _) output -> modelAddPost user output model
-  ]
+cCreatePost conn =
+  Command
+    gen
+    exec
+    [ Update $ \model (CreatePost user _ _) output -> modelAddPost user output model
+    ]
   where
     gen (Model users _) = if null users then Nothing else Just (genCreatePost users)
     exec (CreatePost user title body) = execCreatePost conn (concrete user) title body
@@ -200,10 +205,12 @@ withPool io =
 tests :: IO Bool
 tests =
   withPool $ \pool ->
-  checkParallel $ Group "Tutorial" [
-      ("prop_tables", prop_tables pool)
-    , ("prop_commands", prop_commands pool)
-    ]
+    checkParallel $
+      Group
+        "Tutorial"
+        [ ("prop_tables", prop_tables pool),
+          ("prop_commands", prop_commands pool)
+        ]
 
 main :: IO ()
 main = defaultMain [tests]
