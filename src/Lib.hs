@@ -4,6 +4,7 @@
 module Lib where
 
 import           Control.Exception (Exception, throwIO)
+import           Control.Monad (when)
 
 import           Data.Time.Clock (UTCTime(..))
 import           Data.Text (Text)
@@ -108,10 +109,8 @@ deleteUser conn uid  = do
     DELETE FROM users
     WHERE id = ?
     |] (Only (unUserId uid))
-  if n == 0 then
+  when (n == 0) $
     throwIO $ DbError "user did not exist"
-  else
-    pure ()
 
 readUser :: Connection -> UserId -> IO (Maybe User)
 readUser conn uid = do
