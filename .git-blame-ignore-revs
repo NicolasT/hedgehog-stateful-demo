@@ -1,2 +1,8 @@
 # chore: re-format source-code using `ormolu`
 78ea2f0028970aa6a63ed4c3775a7790a4ec445d
+
+# chore: run `cabal-fmt`
+3858a93e2de2a9472deda6a9360153383964cfb1
+
+# chore: run `cabal-fmt`
+89a7d616bd1aa4d3ac39250dd875ef98e6f116f9
