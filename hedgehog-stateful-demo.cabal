@@ -27,12 +27,12 @@ extra-doc-files:
 
 -- extra-source-files:
 
-tested-with: GHC ==9.4.4
+tested-with:     GHC ==9.4.4
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/NicolasT/hedgehog-stateful-demo.git
-  branch: main
+  branch:   main
 
 common warnings
   ghc-options: -Wall
