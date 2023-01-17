@@ -1,6 +1,6 @@
-commit e5d501911e2ebd97a7edd3e8b122fc7b354a142d
+commit 6d44f4b49a2f2d155f32bd1e48ee9b99282cb0e1
 Author: Nicolas Trangez <ikke@nicolast.be>
-Date:   Mon Jan 16 23:24:11 2023 +0100
+Date:   Tue Jan 17 10:18:05 2023 +0100
 
     ci: run tests as non-root
     
@@ -14,10 +14,10 @@ Date:   Mon Jan 16 23:24:11 2023 +0100
     See: https://github.com/jfischoff/tmp-postgres#github-actions
 
 diff --git a/.github/workflows/haskell-ci.yml b/.github/workflows/haskell-ci.yml
-index 5d1e58d..22fa0b0 100644
+index 273381d..53e3fbb 100644
 --- a/.github/workflows/haskell-ci.yml
 +++ b/.github/workflows/haskell-ci.yml
-@@ -171,7 +171,18 @@ jobs:
+@@ -182,7 +182,18 @@ jobs:
            $CABAL v2-build $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --write-ghc-environment-files=always
        - name: tests
          run: |
@@ -34,6 +34,6 @@ index 5d1e58d..22fa0b0 100644
 +          su -c "/usr/bin/env PATH=$PATH:/usr/lib/postgresql/14/bin $CABAL v2-test $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --test-show-details=direct" test
 +          chown -R root:root dist-newstyle/
 +          userdel -r test
-       - name: cabal check
+       - name: hlint
          run: |
-           cd ${PKGDIR_hedgehog_stateful_demo} || false
+           (cd ${PKGDIR_hedgehog_stateful_demo} && hlint -XHaskell2010 src)

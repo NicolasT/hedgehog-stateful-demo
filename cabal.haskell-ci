@@ -2,5 +2,7 @@ distribution: jammy
 apt:
   postgresql
 
+hlint: True
+
 github-patches:
   .github/workflows/haskell-ci-postgresql-path.patch
