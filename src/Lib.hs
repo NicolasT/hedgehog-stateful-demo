@@ -3,69 +3,70 @@
 
 module Lib where
 
-import           Control.Exception (Exception, throwIO)
-import           Control.Monad (when)
-
-import           Data.Time.Clock (UTCTime(..))
-import           Data.Text (Text)
-
-import           Database.PostgreSQL.Simple (Connection, Only(..), execute, execute_, query)
-import           Database.PostgreSQL.Simple.SqlQQ (sql)
+import Control.Exception (Exception, throwIO)
+import Control.Monad (when)
+import Data.Text (Text)
+import Data.Time.Clock (UTCTime (..))
+import Database.PostgreSQL.Simple (Connection, Only (..), execute, execute_, query)
+import Database.PostgreSQL.Simple.SqlQQ (sql)
 
 newtype DbError = DbError Text
   deriving (Eq, Ord, Show)
-instance Exception DbError where
 
-newtype UserId =
-  UserId {
-      unUserId :: Int
-    } deriving (Eq, Ord, Show)
+instance Exception DbError
 
-data NewUser =
-  NewUser {
-      newuserName :: Text
-    , newuserEmail :: Text
-    } deriving (Eq, Ord, Show)
+newtype UserId = UserId
+  { unUserId :: Int
+  }
+  deriving (Eq, Ord, Show)
 
-data User =
-  User {
-      userId :: UserId
-    , userName :: Text
-    , userEmail :: Text
-    , userCreatedAt :: UTCTime
-    } deriving (Eq, Ord, Show)
+data NewUser = NewUser
+  { newuserName :: Text,
+    newuserEmail :: Text
+  }
+  deriving (Eq, Ord, Show)
+
+data User = User
+  { userId :: UserId,
+    userName :: Text,
+    userEmail :: Text,
+    userCreatedAt :: UTCTime
+  }
+  deriving (Eq, Ord, Show)
 
 packUser :: UserId -> UTCTime -> NewUser -> User
 packUser uid ctime x =
-  User uid
+  User
+    uid
     (newuserName x)
     (newuserEmail x)
     ctime
 
-newtype PostId =
-  PostId {
-      unPostId :: Int
-    } deriving (Eq, Ord, Show)
+newtype PostId = PostId
+  { unPostId :: Int
+  }
+  deriving (Eq, Ord, Show)
 
-data NewPost =
-  NewPost {
-      newpostUserId :: UserId
-    , newpostTitle :: Text
-    , newpostBody :: Text
-    } deriving (Eq, Ord, Show)
+data NewPost = NewPost
+  { newpostUserId :: UserId,
+    newpostTitle :: Text,
+    newpostBody :: Text
+  }
+  deriving (Eq, Ord, Show)
 
-data Post =
-  Post {
-      postId :: PostId
-    , postUserId :: UserId
-    , postTitle :: Text
-    , postBody :: Text
-    , postCreatedAt :: UTCTime
-    } deriving (Eq, Ord, Show)
+data Post = Post
+  { postId :: PostId,
+    postUserId :: UserId,
+    postTitle :: Text,
+    postBody :: Text,
+    postCreatedAt :: UTCTime
+  }
+  deriving (Eq, Ord, Show)
 
 packPost :: PostId -> UTCTime -> NewPost -> Post
 packPost pid ctime x =
-  Post pid
+  Post
+    pid
     (newpostUserId x)
     (newpostTitle x)
     (newpostBody x)
@@ -73,7 +74,10 @@ packPost pid ctime x =
 
 createTables :: Connection -> IO ()
 createTables conn = do
-  _ <- execute_ conn [sql|
+  _ <-
+    execute_
+      conn
+      [sql|
     CREATE TABLE users (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -91,12 +95,16 @@ createTables conn = do
   pure ()
 
 createUser :: Connection -> NewUser -> IO UserId
-createUser conn user  = do
-  rows <- query conn [sql|
+createUser conn user = do
+  rows <-
+    query
+      conn
+      [sql|
     INSERT INTO users (name, email)
     VALUES (?, ?)
     RETURNING id
-    |] (newuserName user, newuserEmail user)
+    |]
+      (newuserName user, newuserEmail user)
   case rows of
     [] ->
       throwIO $ DbError "failed to create user"
@@ -104,21 +112,30 @@ createUser conn user  = do
       pure (UserId uid)
 
 deleteUser :: Connection -> UserId -> IO ()
-deleteUser conn uid  = do
-  n <- execute conn [sql|
+deleteUser conn uid = do
+  n <-
+    execute
+      conn
+      [sql|
     DELETE FROM users
     WHERE id = ?
-    |] (Only (unUserId uid))
+    |]
+      (Only (unUserId uid))
   when (n == 0) $
-    throwIO $ DbError "user did not exist"
+    throwIO $
+      DbError "user did not exist"
 
 readUser :: Connection -> UserId -> IO (Maybe User)
 readUser conn uid = do
-  rows <- query conn [sql|
+  rows <-
+    query
+      conn
+      [sql|
     SELECT name, email, created_at
     FROM users
     WHERE id = ?
-    |] (Only (unUserId uid))
+    |]
+      (Only (unUserId uid))
   case rows of
     [] ->
       pure Nothing
@@ -126,12 +143,16 @@ readUser conn uid = do
       pure (Just (User uid name email ctime))
 
 createPost :: Connection -> NewPost -> IO PostId
-createPost conn post  = do
-  rows <- query conn [sql|
+createPost conn post = do
+  rows <-
+    query
+      conn
+      [sql|
     INSERT INTO posts (user_id, title, body)
     VALUES (?, ?, ?)
     RETURNING id
-    |] (unUserId (newpostUserId post), newpostTitle post, newpostBody post)
+    |]
+      (unUserId (newpostUserId post), newpostTitle post, newpostBody post)
   case rows of
     [] ->
       throwIO $ DbError "failed to create user"
@@ -140,11 +161,15 @@ createPost conn post  = do
 
 readPost :: Connection -> PostId -> IO (Maybe Post)
 readPost conn pid = do
-  rows <- query conn [sql|
+  rows <-
+    query
+      conn
+      [sql|
     SELECT user_id, title, body, created_at
     FROM posts
     WHERE id = ?
-    |] (Only (unPostId pid))
+    |]
+      (Only (unPostId pid))
   case rows of
     [] ->
       pure Nothing
